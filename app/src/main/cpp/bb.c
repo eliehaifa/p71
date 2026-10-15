@@ -658,6 +658,7 @@ static char            g_found_wif[64]  = "";
 static char            g_found_addr[64] = "";
 static char            g_found_hex[33]  = "";
 static char            g_last_msg[256]  = "";
+static u128 g_chunk = (u128)GRP*CHUNK_GROUPS;
 
 static void set_target(const unsigned char h[20]){
     memcpy(g_target,h,20);
@@ -874,20 +875,43 @@ static void*worker_main(void*arg){
             u128 bstart=g_blk_next;
             if(bstart>g_range_end||bstart<g_range_start){pthread_mutex_unlock(&g_blk_mtx);break;}
             u128 len=g_range_end-bstart+1;
-            if(len>CHUNK)len=CHUNK;
+            if(len>g_chunk)len=g_chunk;
             g_blk_next=bstart+len;
             pthread_mutex_unlock(&g_blk_mtx);
             if(scan_chunk(w,bstart,len))break;
         }
-    }else{
+    }else if(wa->mode==1){
         rng_t rng;
         rng_seed(&rng,(u64)time(NULL)^((u64)(wa->id+1)*0xD1B54A32D192ED03ULL)^(u64)(now_sec()*1e6));
         u128 span=g_range_end-g_range_start+1;
-        u128 chunk=span<CHUNK?span:CHUNK;
+        u128 chunk=span<g_chunk?span:g_chunk;
         u128 slots=span-chunk+1;
         while(!atomic_load_explicit(&g_stop,memory_order_relaxed)){
             u128 k0=g_range_start+(rng_u128(&rng)%slots);
             if(scan_chunk(w,k0,chunk))break;
+        }
+    }else if(wa->mode==2){
+        rng_t rng;
+        rng_seed(&rng,(u64)time(NULL)^((u64)(wa->id+1)*0xD1B54A32D192ED03ULL)^(u64)(now_sec()*1e6));
+        u128 span=g_range_end-g_range_start+1;
+        while(!atomic_load_explicit(&g_stop,memory_order_relaxed)){
+            u128 k=g_range_start+(rng_u128(&rng)%span);
+            atomic_store_explicit(&g_cur_lo[w->id],(u64)k,memory_order_relaxed);
+            atomic_store_explicit(&g_cur_hi[w->id],(u64)(k>>64),memory_order_relaxed);
+            ap P;
+            if(scalar_mul(k,&P)){
+                u8 pub[33]; pub33_of(&P,pub);
+                u8 h[20]; hash160_pub(pub,h);
+                if(memcmp(h,g_target,20)==0){
+                    if(atomic_exchange(&g_stop,1)==0){
+                        g_found=1; g_found_key=k;
+                        report_found(k,pub);
+                        atomic_store(&g_ui_state, 2);
+                    }
+                    break;
+                }
+            }
+            atomic_fetch_add_explicit(&g_keys,1,memory_order_relaxed);
         }
     }
 done:
@@ -1030,7 +1054,7 @@ Java_com_pz71_searcher_Native_init(JNIEnv*env, jclass clazz){
 JNIEXPORT jint JNICALL
 Java_com_pz71_searcher_Native_start(JNIEnv*env, jclass clazz,
         jint mode, jstring jstart, jstring jend, jstring jpart,
-        jstring jtarget, jint threads, jstring jfiles)
+        jstring jtarget, jint threads, jint chunkSize, jstring jfiles)
 {
     (void)clazz;
     if(!atomic_load(&g_ready)) {
@@ -1102,6 +1126,7 @@ Java_com_pz71_searcher_Native_start(JNIEnv*env, jclass clazz,
     int* arg = (int*)malloc(sizeof(int));
     *arg = mode;
     g_blk_next = (u128)threads;
+    g_chunk = (chunkSize < 1) ? 1 : (u128)chunkSize;
 
     pthread_t tid;
     pthread_create(&tid,NULL,controller_main,arg);

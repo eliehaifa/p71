@@ -5,7 +5,7 @@ object Native {
 
     external fun init(): Int
     external fun start(mode: Int, start: String, end: String, part: String,
-                       target: String, threads: Int, filesDir: String): Int
+                       target: String, threads: Int, chunkSize: Int, filesDir: String): Int
     external fun stop()
     external fun status(): String
 }
