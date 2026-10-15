@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
         setTextColor(mutedColor)
         textSize = 11f
         setTypeface(typeface, Typeface.BOLD)
-        letterSpacing = 0.15f
+        this.letterSpacing = 0.15f
         setPadding(0, dp(20f), 0, dp(8f))
     }
 
@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
-        setSingleLine(true)
+        maxLines = 1
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
     }
 
@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         textSize = 15f
         setTypeface(typeface, Typeface.BOLD)
         background = rounded(bg, 10f)
-        layoutParams = LinearLayout.LayoutParams(0, dp(52f), 1f).also { it.marginEnd = dp(8f) }
+        layoutParams = LinearLayout.LayoutParams(0, dp(52f), 1f).also { it.rightMargin = dp(8f) }
     }
 
     private val poll = object : Runnable {
@@ -198,7 +198,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(mutedColor)
             textSize = 12f
             setTypeface(typeface, Typeface.BOLD)
-            letterSpacing = 0.2f
+            this.letterSpacing = 0.2f
         }
         statusCard.addView(tvState)
         tvBig = TextView(this).apply {
