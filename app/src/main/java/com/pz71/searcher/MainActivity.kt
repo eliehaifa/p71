@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
             text = "00:00:00"
             setTextColor(textColor)
             textSize = 40f
-            setTypeface(typeface, Typeface.MONOSPACE)
+            typeface = Typeface.MONOSPACE
             setPadding(0, dp(4f), 0, dp(2f))
         }
         statusCard.addView(tvBig)
@@ -213,14 +213,14 @@ class MainActivity : AppCompatActivity() {
             text = "0 keys/s   0 checked   0%"
             setTextColor(mutedColor)
             textSize = 13f
-            setTypeface(typeface, Typeface.MONOSPACE)
+            typeface = Typeface.MONOSPACE
         }
         statusCard.addView(tvSub)
         tvKey = TextView(this).apply {
             text = "key 0x0"
             setTextColor(mutedColor)
             textSize = 11f
-            setTypeface(typeface, Typeface.MONOSPACE)
+            typeface = Typeface.MONOSPACE
             setPadding(0, dp(6f), 0, 0)
         }
         statusCard.addView(tvKey)
@@ -289,7 +289,7 @@ class MainActivity : AppCompatActivity() {
         tvLog = TextView(this).apply {
             setTextColor(mutedColor)
             textSize = 11f
-            setTypeface(typeface, Typeface.MONOSPACE)
+            typeface = Typeface.MONOSPACE
             movementMethod = ScrollingMovementMethod()
             text = "ready."
         }
