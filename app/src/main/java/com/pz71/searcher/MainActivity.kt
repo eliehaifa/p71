@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvKey: TextView
     private lateinit var tvLog: TextView
 
+    private lateinit var presetsRow: LinearLayout
     private lateinit var foundList: LinearLayout
 
     private lateinit var cbKeepAwake: CheckBox
@@ -222,6 +223,22 @@ class MainActivity : AppCompatActivity() {
         }
         card.addView(tvKey)
         ll.addView(card)
+
+        ll.addView(sectionLabel("PRESETS"))
+        presetsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        ll.addView(presetsRow)
+        val savePresetBtn = Button(this).apply {
+            text = "+ SAVE CURRENT AS PRESET"
+            setTextColor(accentColor); textSize = 12f
+            background = rounded(inputBg, 8f)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44f)
+            ).also { it.topMargin = dp(8f) }
+            setOnClickListener { savePresetDialog() }
+        }
+        ll.addView(savePresetBtn)
 
         ll.addView(sectionLabel("SEARCH RANGE"))
         ll.addView(fieldLabel("Range start  (hex or decimal)"))
@@ -506,6 +523,75 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
     }
 
+    private fun rebuildPresets() {
+        if (!::presetsRow.isInitialized) return
+        presetsRow.removeAllViews()
+        val items = Presets.list(this)
+        if (items.isEmpty()) {
+            presetsRow.addView(TextView(this).apply {
+                text = "No presets. Save one below."
+                setTextColor(mutedColor); textSize = 12f
+            })
+            return
+        }
+        for (p in items) {
+            val btn = Button(this).apply {
+                text = p.name
+                setTextColor(Color.parseColor("#0E1016"))
+                background = rounded(accentColor, 8f)
+                textSize = 12f
+                setPadding(dp(14f), dp(6f), dp(14f), dp(6f))
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).also { it.rightMargin = dp(6f) }
+                setOnClickListener {
+                    etStart.setText(p.start)
+                    etEnd.setText(p.end)
+                    etTarget.setText(p.target)
+                    appendLog("INFO", "loaded preset '${p.name}'")
+                }
+                setOnLongClickListener {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Delete preset?")
+                        .setMessage(p.name)
+                        .setPositiveButton("Delete") { _, _ ->
+                            Presets.remove(this@MainActivity, p.name)
+                            rebuildPresets()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                    true
+                }
+            }
+            presetsRow.addView(btn)
+        }
+    }
+
+    private fun savePresetDialog() {
+        val input = EditText(this).apply {
+            hint = "Preset name"
+            setTextColor(textColor)
+            setHintTextColor(mutedColor)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Save preset")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim().ifEmpty { "Untitled" }
+                Presets.add(this, Preset(
+                    name,
+                    etStart.text.toString().trim(),
+                    etEnd.text.toString().trim(),
+                    etTarget.text.toString().trim()
+                ))
+                rebuildPresets()
+                appendLog("OK", "saved preset '$name'")
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun openBatterySettings() {
         try {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
@@ -665,7 +751,7 @@ class MainActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Resume last session?")
-            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  â†’  $end")
+            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  Ã¢â€ â€™  $end")
             .setPositiveButton("Resume") { _, _ ->
                 etStart.setText("0x$key")
                 etTarget.setText(target)
