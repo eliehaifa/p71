@@ -528,14 +528,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Saved: ${f.absolutePath}", Toast.LENGTH_LONG).show()
             appendLog("OK", "exported to ${f.absolutePath}")
 
-            val i = Intent(Intent.ACTION_SEND).apply {
-                type = "application/json"
-                putExtra(Intent.EXTRA_STREAM, androidx.core.content.FileProvider.getUriForFile(
-                    this, "$packageName.fileprovider", f))
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            // Only send if we actually have a provider (we may not; fall through silently)
-            try { startActivity(Intent.createChooser(i, "Share export")) } catch (_: Exception) {}
+            // (share disabled - provider not configured)
         } catch (e: Exception) {
             appendLog("ERR", "export failed: ${e.message}")
             Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
@@ -672,7 +665,7 @@ class MainActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Resume last session?")
-            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  →  $end")
+            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  â†’  $end")
             .setPositiveButton("Resume") { _, _ ->
                 etStart.setText("0x$key")
                 etTarget.setText(target)
