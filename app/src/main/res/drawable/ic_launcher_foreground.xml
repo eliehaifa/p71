@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- outer ring -->
+    <path android:fillColor="#2EE59D"
+        android:pathData="M54,26 a22,22 0 1,0 0,44 a22,22 0 1,0 0,-44 z M54,34 a14,14 0 1,1 0,28 a14,14 0 1,1 0,-28 z" />
+    <!-- key shaft + teeth -->
+    <path android:fillColor="#2EE59D"
+        android:pathData="M54,72 l0,10 l-6,0 l0,-6 l-8,0 l0,-6 l-6,0 l0,-6 l20,0 z" />
+    <!-- keyhole -->
+    <path android:fillColor="#0E1016"
+        android:pathData="M54,40 a6,6 0 1,0 0,12 a6,6 0 1,0 0,-12 z M52,50 l4,0 l0,10 l-4,0 z" />
+</vector>

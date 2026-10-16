@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PZ Searcher</string>
+    <string name="tab_search">Search</string>
+    <string name="tab_found">Found</string>
+    <string name="tab_settings">Settings</string>
+</resources>
