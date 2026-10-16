@@ -38,7 +38,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.tabs.TabLayout
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -66,7 +65,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etPart: EditText
     private lateinit var etThreads: EditText
     private lateinit var etChunk: EditText
-    private lateinit var cbRandom: CheckBox
+    private lateinit var btnModeSeq: Button
+    private lateinit var btnModeRandChunk: Button
+    private lateinit var btnModeTrueRand: Button
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var tvState: TextView
@@ -74,14 +75,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSub: TextView
     private lateinit var tvKey: TextView
     private lateinit var tvLog: TextView
+    private lateinit var presetsContainer: LinearLayout
 
-    private lateinit var presetsRow: LinearLayout
     private lateinit var foundList: LinearLayout
 
     private lateinit var cbKeepAwake: CheckBox
     private lateinit var cbSound: CheckBox
     private lateinit var cbVibrate: CheckBox
     private lateinit var cbNotif: CheckBox
+    private lateinit var cbVerboseLog: CheckBox
     private lateinit var btnBattery: Button
     private lateinit var btnClearFound: Button
     private lateinit var btnExport: Button
@@ -90,6 +92,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnClearLog: Button
     private lateinit var tvAbout: TextView
 
+    private var searchMode = 0
+
     private val handler = Handler(Looper.getMainLooper())
     private var polling = false
     private val logLines = ArrayDeque<String>()
@@ -97,6 +101,7 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var benchmarkActive = false
     private var lastResumeSaveMs = 0L
+    private var lastHeartbeatMs = 0L
 
     private val prefs by lazy { getSharedPreferences("pz71_settings", Context.MODE_PRIVATE) }
     private val resumePrefs by lazy { getSharedPreferences("pz71_resume", Context.MODE_PRIVATE) }
@@ -139,6 +144,13 @@ class MainActivity : AppCompatActivity() {
         layoutParams = LinearLayout.LayoutParams(0, dp(52f), 1f).also { it.rightMargin = dp(8f) }
     }
 
+    private fun modeBtn(text: String): Button = Button(this).apply {
+        this.text = text; textSize = 12f
+        setTypeface(typeface, Typeface.BOLD)
+        isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(0, dp(46f), 1f).also { it.rightMargin = dp(6f) }
+    }
+
     private fun bigButton(text: String, fg: Int): Button = Button(this).apply {
         this.text = text; setTextColor(fg); textSize = 13f
         background = rounded(inputBg, 10f)
@@ -155,19 +167,36 @@ class MainActivity : AppCompatActivity() {
     private fun timestamp(): String =
         SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
 
+    private fun fmtCount(n: Long): String {
+        val d = n.toDouble()
+        return when {
+            d < 1_000 -> n.toString()
+            d < 1_000_000 -> String.format(Locale.US, "%.2fK", d / 1_000)
+            d < 1_000_000_000 -> String.format(Locale.US, "%.2fM", d / 1_000_000)
+            d < 1_000_000_000_000 -> String.format(Locale.US, "%.2fB", d / 1_000_000_000)
+            else -> String.format(Locale.US, "%.2fT", d / 1_000_000_000_000)
+        }
+    }
+
     private fun appendLog(tag: String, line: String) {
         val entry = "[$tag] ${timestamp()}  $line"
         logLines.addLast(entry)
         while (logLines.size > 400) logLines.removeFirst()
-        val text = logLines.joinToString("\n")
-        tvLog.text = text
+        tvLog.text = logLines.joinToString("\n")
         tvLog.post { (tvLog.parent as? ScrollView)?.fullScroll(View.FOCUS_DOWN) }
         Thread { LogStore.append(this, entry) }.start()
     }
 
-    // =========================================================
-    //  SEARCH TAB
-    // =========================================================
+    private fun applyModeVisuals() {
+        val selFg = Color.parseColor("#0E1016")
+        btnModeSeq.background = rounded(if (searchMode == 0) accentColor else inputBg, 10f)
+        btnModeSeq.setTextColor(if (searchMode == 0) selFg else textColor)
+        btnModeRandChunk.background = rounded(if (searchMode == 1) accentColor else inputBg, 10f)
+        btnModeRandChunk.setTextColor(if (searchMode == 1) selFg else textColor)
+        btnModeTrueRand.background = rounded(if (searchMode == 2) accentColor else inputBg, 10f)
+        btnModeTrueRand.setTextColor(if (searchMode == 2) selFg else textColor)
+    }
+
     private fun buildSearchTab(): ScrollView {
         val root = ScrollView(this).apply {
             setBackgroundColor(bgColor)
@@ -205,33 +234,37 @@ class MainActivity : AppCompatActivity() {
         }
         card.addView(tvState)
         tvBig = TextView(this).apply {
-            text = "00:00:00"; setTextColor(textColor); textSize = 40f
+            text = "00:00:00"; setTextColor(textColor); textSize = 42f
             typeface = Typeface.MONOSPACE
-            setPadding(0, dp(4f), 0, dp(2f))
+            setPadding(0, dp(6f), 0, dp(2f))
         }
         card.addView(tvBig)
         tvSub = TextView(this).apply {
-            text = "0 keys/s   0 checked   0%"
+            text = "0 keys/s · 0 checked · 0%"
             setTextColor(mutedColor); textSize = 13f
             typeface = Typeface.MONOSPACE
         }
         card.addView(tvSub)
         tvKey = TextView(this).apply {
-            text = "key 0x0"; setTextColor(mutedColor); textSize = 11f
+            text = "key —"
+            setTextColor(accentColor); textSize = 12f
             typeface = Typeface.MONOSPACE
-            setPadding(0, dp(6f), 0, 0)
+            setPadding(0, dp(8f), 0, 0)
+            setTextIsSelectable(true)
         }
         card.addView(tvKey)
         ll.addView(card)
 
         ll.addView(sectionLabel("PRESETS"))
-        presetsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        presetsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
         }
-        ll.addView(presetsRow)
+        ll.addView(presetsContainer)
+
         val savePresetBtn = Button(this).apply {
             text = "+ SAVE CURRENT AS PRESET"
             setTextColor(accentColor); textSize = 12f
+            isAllCaps = false
             background = rounded(inputBg, 8f)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(44f)
@@ -251,15 +284,32 @@ class MainActivity : AppCompatActivity() {
         etTarget = input("1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU")
         ll.addView(etTarget)
 
-        ll.addView(sectionLabel("MODE"))
+        ll.addView(sectionLabel("SEARCH MODE"))
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        btnModeSeq       = modeBtn("SEQUENTIAL")
+        btnModeRandChunk = modeBtn("RAND CHUNKS")
+        btnModeTrueRand  = modeBtn("TRUE RANDOM")
+        modeRow.addView(btnModeSeq)
+        modeRow.addView(btnModeRandChunk)
+        modeRow.addView(btnModeTrueRand)
+        ll.addView(modeRow)
+
+        btnModeSeq.setOnClickListener { searchMode = 0; applyModeVisuals() }
+        btnModeRandChunk.setOnClickListener { searchMode = 1; applyModeVisuals() }
+        btnModeTrueRand.setOnClickListener { searchMode = 2; applyModeVisuals() }
+        applyModeVisuals()
+
         ll.addView(fieldLabel("Part  (full | half1 | half2 | q1..q4 | N:K)"))
         etPart = input("full"); ll.addView(etPart)
-        ll.addView(fieldLabel("Chunk size  (1 = truly random, 1049600 = fast chunks)"))
+
+        ll.addView(fieldLabel("Chunk size  (RAND CHUNKS: 1049600 recommended)"))
         etChunk = input("1049600"); ll.addView(etChunk)
+
         ll.addView(fieldLabel("Threads"))
         etThreads = input(Runtime.getRuntime().availableProcessors().toString())
         ll.addView(etThreads)
-        cbRandom = toggle("Random start points", true); ll.addView(cbRandom)
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -280,7 +330,7 @@ class MainActivity : AppCompatActivity() {
         }
         val logScroll = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(240f))
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(260f))
         }
         tvLog = TextView(this).apply {
             setTextColor(mutedColor); textSize = 11f
@@ -295,9 +345,6 @@ class MainActivity : AppCompatActivity() {
         return root
     }
 
-    // =========================================================
-    //  FOUND TAB
-    // =========================================================
     private fun buildFoundTab(): ScrollView {
         val root = ScrollView(this).apply {
             setBackgroundColor(bgColor); visibility = View.GONE
@@ -404,9 +451,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // =========================================================
-    //  SETTINGS TAB
-    // =========================================================
     private fun buildSettingsTab(): ScrollView {
         val root = ScrollView(this).apply {
             setBackgroundColor(bgColor); visibility = View.GONE
@@ -428,12 +472,14 @@ class MainActivity : AppCompatActivity() {
         })
 
         ll.addView(sectionLabel("BEHAVIOUR"))
-        cbKeepAwake = toggle("Keep screen awake while searching", prefs.getBoolean("keepAwake", true))
-        cbSound     = toggle("Play sound on found", prefs.getBoolean("sound", true))
-        cbVibrate   = toggle("Vibrate on found", prefs.getBoolean("vibrate", true))
-        cbNotif     = toggle("Show notification on found", prefs.getBoolean("notif", true))
+        cbKeepAwake  = toggle("Keep screen awake while searching", prefs.getBoolean("keepAwake", true))
+        cbSound      = toggle("Play sound on found", prefs.getBoolean("sound", true))
+        cbVibrate    = toggle("Vibrate on found", prefs.getBoolean("vibrate", true))
+        cbNotif      = toggle("Show notification on found", prefs.getBoolean("notif", true))
+        cbVerboseLog = toggle("Log scanned key every 5s", prefs.getBoolean("verboseLog", true))
         ll.addView(cbKeepAwake); ll.addView(cbSound)
         ll.addView(cbVibrate);   ll.addView(cbNotif)
+        ll.addView(cbVerboseLog)
 
         val savePrefs = View.OnClickListener {
             prefs.edit()
@@ -441,6 +487,7 @@ class MainActivity : AppCompatActivity() {
                 .putBoolean("sound", cbSound.isChecked)
                 .putBoolean("vibrate", cbVibrate.isChecked)
                 .putBoolean("notif", cbNotif.isChecked)
+                .putBoolean("verboseLog", cbVerboseLog.isChecked)
                 .apply()
             applyKeepAwake()
         }
@@ -448,6 +495,7 @@ class MainActivity : AppCompatActivity() {
         cbSound.setOnClickListener(savePrefs)
         cbVibrate.setOnClickListener(savePrefs)
         cbNotif.setOnClickListener(savePrefs)
+        cbVerboseLog.setOnClickListener(savePrefs)
 
         ll.addView(sectionLabel("BATTERY"))
         ll.addView(fieldLabel("Android may throttle background work. Disable battery optimization for this app for reliable long runs."))
@@ -508,7 +556,7 @@ class MainActivity : AppCompatActivity() {
         val abis = if (Build.VERSION.SDK_INT >= 21)
             Build.SUPPORTED_ABIS.joinToString(", ") else "unknown"
         return """
-            PZ Searcher v2.1
+            PZ Searcher v2.2
             Package:  ${packageName}
             Android:  ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})
             Device:   ${Build.MANUFACTURER} ${Build.MODEL}
@@ -517,34 +565,53 @@ class MainActivity : AppCompatActivity() {
             Engine:  custom secp256k1, batched
             affine inversion, SIMD SHA-256 /
             RIPEMD-160, self-tested on launch.
-
-            Log file:  filesDir/pz71.log
-            Export dir: filesDir/pz71-export.json
         """.trimIndent()
     }
 
+    private fun openBatterySettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            })
+        } catch (e: Exception) {
+            try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            catch (e2: Exception) {
+                Toast.makeText(this, "Cannot open battery settings", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun rebuildPresets() {
-        if (!::presetsRow.isInitialized) return
-        presetsRow.removeAllViews()
+        if (!::presetsContainer.isInitialized) return
+        presetsContainer.removeAllViews()
         val items = Presets.list(this)
         if (items.isEmpty()) {
-            presetsRow.addView(TextView(this).apply {
+            presetsContainer.addView(TextView(this).apply {
                 text = "No presets. Save one below."
                 setTextColor(mutedColor); textSize = 12f
             })
             return
         }
-        for (p in items) {
+        var row: LinearLayout? = null
+        for ((i, p) in items.withIndex()) {
+            if (i % 2 == 0) {
+                row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).also { it.bottomMargin = dp(6f) }
+                }
+                presetsContainer.addView(row)
+            }
             val btn = Button(this).apply {
                 text = p.name
                 setTextColor(Color.parseColor("#0E1016"))
                 background = rounded(accentColor, 8f)
                 textSize = 12f
-                setPadding(dp(14f), dp(6f), dp(14f), dp(6f))
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).also { it.rightMargin = dp(6f) }
+                isAllCaps = false
+                layoutParams = LinearLayout.LayoutParams(0, dp(44f), 1f).also {
+                    it.rightMargin = dp(4f); it.leftMargin = dp(4f)
+                }
                 setOnClickListener {
                     etStart.setText(p.start)
                     etEnd.setText(p.end)
@@ -564,7 +631,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
             }
-            presetsRow.addView(btn)
+            row!!.addView(btn)
         }
     }
 
@@ -592,29 +659,11 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openBatterySettings() {
-        try {
-            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = Uri.parse("package:$packageName")
-            })
-        } catch (e: Exception) {
-            try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-            catch (e2: Exception) {
-                Toast.makeText(this, "Cannot open battery settings", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    // =========================================================
-    //  EXPORT / IMPORT / BENCHMARK
-    // =========================================================
     private fun doExport() {
         try {
             val f = Exporter.exportToFilesDir(this)
             Toast.makeText(this, "Saved: ${f.absolutePath}", Toast.LENGTH_LONG).show()
             appendLog("OK", "exported to ${f.absolutePath}")
-
-            // (share disabled - provider not configured)
         } catch (e: Exception) {
             appendLog("ERR", "export failed: ${e.message}")
             Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
@@ -674,9 +723,6 @@ class MainActivity : AppCompatActivity() {
         handler.post(poll)
     }
 
-    // =========================================================
-    //  Effects
-    // =========================================================
     private fun beep() {
         try {
             val tg = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
@@ -719,9 +765,6 @@ class MainActivity : AppCompatActivity() {
         wakeLock = null
     }
 
-    // =========================================================
-    //  Resume state
-    // =========================================================
     private fun saveResumeState(currentKey: String) {
         resumePrefs.edit()
             .putString("key", currentKey)
@@ -731,7 +774,7 @@ class MainActivity : AppCompatActivity() {
             .putString("part", etPart.text.toString().trim())
             .putString("threads", etThreads.text.toString().trim())
             .putString("chunk", etChunk.text.toString().trim())
-            .putBoolean("random", cbRandom.isChecked)
+            .putInt("mode", searchMode)
             .putLong("ts", System.currentTimeMillis())
             .apply()
     }
@@ -746,16 +789,17 @@ class MainActivity : AppCompatActivity() {
         val start = resumePrefs.getString("start", "") ?: ""
         val end = resumePrefs.getString("end", "") ?: ""
         if (key.isEmpty() || target.isEmpty()) return
-        // only meaningful for sequential mode
-        if (resumePrefs.getBoolean("random", true)) return
+        if (resumePrefs.getInt("mode", 1) != 0) return
 
         AlertDialog.Builder(this)
             .setTitle("Resume last session?")
-            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  Ã¢â€ â€™  $end")
+            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  →  $end")
             .setPositiveButton("Resume") { _, _ ->
                 etStart.setText("0x$key")
                 etTarget.setText(target)
                 etEnd.setText(end)
+                searchMode = 0
+                applyModeVisuals()
                 appendLog("INFO", "resuming from 0x$key")
             }
             .setNegativeButton("Start fresh") { _, _ ->
@@ -766,9 +810,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // =========================================================
-    //  Found
-    // =========================================================
     private fun handleFound(hex: String, wif: String, addr: String) {
         FoundStore.add(this, FoundKey(hex, wif, addr, System.currentTimeMillis()))
         rebuildFoundList()
@@ -804,9 +845,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // =========================================================
-    //  Poll
-    // =========================================================
     private val poll = object : Runnable {
         override fun run() {
             val s = Native.status()
@@ -814,7 +852,7 @@ class MainActivity : AppCompatActivity() {
             if (parts.size >= 9) {
                 val state   = parts[0]
                 val elapsed = parts[1]
-                val keys    = parts[2]
+                val keysStr = parts[2]
                 val kps     = parts[3]
                 val pct     = parts[4]
                 val cur     = parts[5]
@@ -833,12 +871,29 @@ class MainActivity : AppCompatActivity() {
                 tvState.setTextColor(stateColor)
 
                 val secs = elapsed.toDoubleOrNull() ?: 0.0
-                val hh = (secs / 3600).toInt()
+                val days = (secs / 86400).toInt()
+                val hh = ((secs % 86400) / 3600).toInt()
                 val mm = ((secs % 3600) / 60).toInt()
                 val ss = (secs % 60).toInt()
-                tvBig.text = String.format("%02d:%02d:%02d", hh, mm, ss)
-                tvSub.text = "$kps keys/s   $keys checked   $pct%"
+                tvBig.text = if (days > 0)
+                    String.format(Locale.US, "%dd %02d:%02d:%02d", days, hh, mm, ss)
+                else
+                    String.format(Locale.US, "%02d:%02d:%02d", hh, mm, ss)
+
+                val keyCount = keysStr.toLongOrNull() ?: 0L
+                tvSub.text = "$kps keys/s · ${fmtCount(keyCount)} checked · $pct%"
                 tvKey.text = "key 0x$cur"
+
+                val now = System.currentTimeMillis()
+                if (state == "running" &&
+                    prefs.getBoolean("verboseLog", true) &&
+                    now - lastHeartbeatMs > 5000) {
+                    lastHeartbeatMs = now
+                    logLines.addLast("[SCAN] ${timestamp()}  at 0x$cur  ($kps keys/s)")
+                    while (logLines.size > 400) logLines.removeFirst()
+                    tvLog.text = logLines.joinToString("\n")
+                    tvLog.post { (tvLog.parent as? ScrollView)?.fullScroll(View.FOCUS_DOWN) }
+                }
 
                 if (foundHex.isNotEmpty() && foundHex != lastFoundHex) {
                     lastFoundHex = foundHex
@@ -846,10 +901,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (state == "running") {
-                    // save resume state every ~30 seconds
-                    val now = System.currentTimeMillis()
-                    if (!benchmarkActive && !cbRandom.isChecked && now - lastResumeSaveMs > 30_000) {
-                        lastResumeSaveMs = now
+                    val nowMs = System.currentTimeMillis()
+                    if (!benchmarkActive && searchMode == 0 && nowMs - lastResumeSaveMs > 30_000) {
+                        lastResumeSaveMs = nowMs
                         try {
                             val k = Native.getCurrentKey()
                             if (k.isNotEmpty() && k != "0") saveResumeState(k)
@@ -859,10 +913,9 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
-                // finished / stopped / done
                 if (benchmarkActive) {
                     benchmarkActive = false
-                    appendLog("OK", "benchmark: $kps keys/s over $keys keys in ${elapsed}s")
+                    appendLog("OK", "benchmark: $kps keys/s over $keysStr keys in ${elapsed}s")
                     Toast.makeText(this@MainActivity, "Benchmark: $kps keys/s", Toast.LENGTH_LONG).show()
                 } else if (state == "done") {
                     appendLog("INFO", "range finished")
@@ -879,9 +932,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // =========================================================
-    //  Lifecycle
-    // =========================================================
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Notifier.ensureChannel(this)
@@ -928,6 +978,7 @@ class MainActivity : AppCompatActivity() {
                 foundRoot.visibility    = if (tab.position == 1) View.VISIBLE else View.GONE
                 settingsRoot.visibility = if (tab.position == 2) View.VISIBLE else View.GONE
                 if (tab.position == 1) rebuildFoundList()
+                if (tab.position == 0) rebuildPresets()
             }
             override fun onTabUnselected(tab: TabLayout.Tab) {}
             override fun onTabReselected(tab: TabLayout.Tab) {}
@@ -935,7 +986,6 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(root)
 
-        // restore persistent log
         Thread {
             val prev = LogStore.readLast(this, 200)
             runOnUiThread {
@@ -948,21 +998,20 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
 
-        // self-test
         Thread {
             val ok = Native.init() == 1
             runOnUiThread { appendLog(if (ok) "OK" else "ERR",
                 if (ok) "self-test passed" else "self-test FAILED") }
         }.start()
 
+        searchRoot.post { rebuildPresets() }
         rebuildFoundList()
         applyKeepAwake()
 
-        // offer resume if a session exists (post so it appears after layout)
         handler.postDelayed({ maybeOfferResume() }, 600)
 
         btnStart.setOnClickListener {
-            val mode = if (cbRandom.isChecked) 1 else 0
+            val mode = searchMode
             val start = etStart.text.toString().trim()
             val end   = etEnd.text.toString().trim()
             val tgt   = etTarget.text.toString().trim()
@@ -977,6 +1026,7 @@ class MainActivity : AppCompatActivity() {
             btnStop.isEnabled = true
             lastFoundHex = null
             lastResumeSaveMs = 0L
+            lastHeartbeatMs = 0L
             acquirePartialWakeLock()
             polling = true
             applyKeepAwake()
