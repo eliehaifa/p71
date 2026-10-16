@@ -172,7 +172,7 @@ static void hash160_pub(const u8 pub33[33], u8 out[20])
 #else
 #  define LANES 4
 #endif
-typedef u32 vu __attribute__((vector_size(4*LANES), aligned(4)));
+typedef u32 vu __attribute__((vector_size(4*LANES), aligned(16)));
 #define VC(x) ((vu){0} + (u32)(x))
 #define VROTR(x,n) (((x)>>(n))|((x)<<(32-(n))))
 #define VROTL(x,n) (((x)<<(n))|((x)>>(32-(n))))
