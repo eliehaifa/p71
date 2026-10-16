@@ -8,4 +8,5 @@ object Native {
                        target: String, threads: Int, chunkSize: Int, filesDir: String): Int
     external fun stop()
     external fun status(): String
+    external fun getCurrentKey(): String
 }

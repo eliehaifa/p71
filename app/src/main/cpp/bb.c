@@ -1184,3 +1184,10 @@ Java_com_pz71_searcher_Native_status(JNIEnv*env, jclass clazz){
         g_found_hex, g_found_wif, g_found_addr, g_last_msg);
     return (*env)->NewStringUTF(env,out);
 }
+JNIEXPORT jstring JNICALL
+Java_com_pz71_searcher_Native_getCurrentKey(JNIEnv*env, jclass clazz){
+    (void)clazz;
+    u128 k = g_blk_next;
+    char h[33]; u128_to_hex(k, h);
+    return (*env)->NewStringUTF(env, h);
+}
