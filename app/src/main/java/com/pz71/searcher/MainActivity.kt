@@ -44,14 +44,17 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private val bgColor     = Color.parseColor("#0E1016")
-    private val cardColor   = Color.parseColor("#181B22")
-    private val inputBg     = Color.parseColor("#232830")
-    private val textColor   = Color.parseColor("#E6EAF2")
-    private val mutedColor  = Color.parseColor("#7C8698")
-    private val accentColor = Color.parseColor("#2EE59D")
-    private val dangerColor = Color.parseColor("#FF6B6B")
-    private val infoColor   = Color.parseColor("#6EC1FF")
+    private val palette: Palette by lazy {
+        Palettes.byKey(prefs.getString("theme", "dark"))
+    }
+    private val bgColor     get() = palette.bg
+    private val cardColor   get() = palette.card
+    private val inputBg     get() = palette.input
+    private val textColor   get() = palette.text
+    private val mutedColor  get() = palette.muted
+    private val accentColor get() = palette.accent
+    private val dangerColor get() = palette.danger
+    private val infoColor   get() = palette.info
 
     private lateinit var contentHost: FrameLayout
     private lateinit var searchRoot: ScrollView
@@ -240,13 +243,13 @@ class MainActivity : AppCompatActivity() {
         }
         card.addView(tvBig)
         tvSub = TextView(this).apply {
-            text = "0 keys/s · 0 checked · 0%"
+            text = "0 keys/s Â· 0 checked Â· 0%"
             setTextColor(mutedColor); textSize = 13f
             typeface = Typeface.MONOSPACE
         }
         card.addView(tvSub)
         tvKey = TextView(this).apply {
-            text = "key —"
+            text = "key â€”"
             setTextColor(accentColor); textSize = 12f
             typeface = Typeface.MONOSPACE
             setPadding(0, dp(8f), 0, 0)
@@ -539,6 +542,57 @@ class MainActivity : AppCompatActivity() {
         }
         ll.addView(btnClearLog)
 
+        ll.addView(sectionLabel("THEME"))
+        val currentTheme = prefs.getString("theme", "dark")
+        val themeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val themeOptions = listOf("dark" to "Dark", "amoled" to "AMOLED", "light" to "Light")
+        for ((key, label) in themeOptions) {
+            val selected = key == currentTheme
+            val b = Button(this).apply {
+                text = label
+                isAllCaps = false
+                textSize = 13f
+                setTypeface(typeface, Typeface.BOLD)
+                background = rounded(if (selected) palette.accent else palette.input, 10f)
+                setTextColor(if (selected) Color.parseColor("#0E1016") else palette.text)
+                layoutParams = LinearLayout.LayoutParams(0, dp(44f), 1f).also {
+                    it.rightMargin = dp(6f)
+                }
+                setOnClickListener {
+                    prefs.edit().putString("theme", key).apply()
+                    recreate()
+                }
+            }
+            themeRow.addView(b)
+        }
+        ll.addView(themeRow)
+
+        val resetPresetsBtn = Button(this).apply {
+            text = "RESET PRESETS TO PUZZLES 66-71"
+            setTextColor(infoColor)
+            textSize = 12f
+            isAllCaps = false
+            background = rounded(inputBg, 10f)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(46f)
+            ).also { it.topMargin = dp(10f) }
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Reset presets?")
+                    .setMessage("This replaces your saved presets with the six default puzzle presets (66-71).")
+                    .setPositiveButton("Reset") { _, _ ->
+                        Presets.resetToSeeds(this@MainActivity)
+                        rebuildPresets()
+                        Toast.makeText(this@MainActivity, "Presets reset", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+        ll.addView(resetPresetsBtn)
+
         ll.addView(sectionLabel("ABOUT"))
         tvAbout = TextView(this).apply {
             text = buildAboutText()
@@ -556,7 +610,7 @@ class MainActivity : AppCompatActivity() {
         val abis = if (Build.VERSION.SDK_INT >= 21)
             Build.SUPPORTED_ABIS.joinToString(", ") else "unknown"
         return """
-            PZ Searcher v2.2
+            PZ Searcher v2.3
             Package:  ${packageName}
             Android:  ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})
             Device:   ${Build.MANUFACTURER} ${Build.MODEL}
@@ -793,7 +847,7 @@ class MainActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Resume last session?")
-            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  →  $end")
+            .setMessage("Last position:\n0x$key\n\nTarget:\n$target\n\nRange:\n$start  â†’  $end")
             .setPositiveButton("Resume") { _, _ ->
                 etStart.setText("0x$key")
                 etTarget.setText(target)
@@ -881,7 +935,7 @@ class MainActivity : AppCompatActivity() {
                     String.format(Locale.US, "%02d:%02d:%02d", hh, mm, ss)
 
                 val keyCount = keysStr.toLongOrNull() ?: 0L
-                tvSub.text = "$kps keys/s · ${fmtCount(keyCount)} checked · $pct%"
+                tvSub.text = "$kps keys/s Â· ${fmtCount(keyCount)} checked Â· $pct%"
                 tvKey.text = "key 0x$cur"
 
                 val now = System.currentTimeMillis()

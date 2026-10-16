@@ -3,6 +3,7 @@ package com.pz71.searcher
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.math.BigInteger
 
 data class Preset(
     val name: String,
@@ -14,26 +15,35 @@ data class Preset(
 object Presets {
     private const val PREFS = "pz71_presets"
     private const val KEY = "items"
+    private const val SEEDED = "seeded_v2"
 
-    // Only seeded with addresses I'm confident about.
-    // Add your own for 60, 64, 66, etc. via the Save button.
+    private fun pStart(n: Int): String =
+        "0x" + BigInteger.ONE.shiftLeft(n - 1).toString(16)
+    private fun pEnd(n: Int): String =
+        "0x" + BigInteger.ONE.shiftLeft(n).subtract(BigInteger.ONE).toString(16)
+
     private val SEED = listOf(
-        Preset(
-            "Puzzle 71",
-            "0x4" + "0".repeat(17),
-            "0x7" + "F".repeat(17),
-            "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"
-        )
+        Preset("Puzzle 71  · 7.1 BTC", pStart(71), pEnd(71), "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"),
+        Preset("Puzzle 70  · 0.7 BTC", pStart(70), pEnd(70), "19YZECXj3SxEZMoUeJ1yiPsw8xANe7M7QR"),
+        Preset("Puzzle 69  · 0.69 BTC", pStart(69), pEnd(69), "19vkiEajfhuZ8bs8Zu2jgmC6oqZbWqhxhG"),
+        Preset("Puzzle 68  · 0.68 BTC", pStart(68), pEnd(68), "1MVDYgVaSN6iKKEsbzRUAYFrJYJadLYZvvZ"),
+        Preset("Puzzle 67  · 0.67 BTC", pStart(67), pEnd(67), "1BY8GQbnueYofwSuFAT3USAhGjPrkxDdW9"),
+        Preset("Puzzle 66  · 0.66 BTC", pStart(66), pEnd(66), "13zb1hQbWVsc2S7ZTZnP2G4undNNpdh5so")
     )
 
     fun list(ctx: Context): MutableList<Preset> {
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val raw = prefs.getString(KEY, null)
-        if (raw == null) {
+        val seeded = prefs.getBoolean(SEEDED, false)
+
+        if (!seeded) {
+            // First run with v2 seeds: install seeds (replacing any old single-preset state)
             val out = SEED.toMutableList()
             save(ctx, out)
+            prefs.edit().putBoolean(SEEDED, true).apply()
             return out
         }
+
+        val raw = prefs.getString(KEY, null) ?: return SEED.toMutableList()
         val arr = JSONArray(raw)
         val out = mutableListOf<Preset>()
         for (i in 0 until arr.length()) {
@@ -61,6 +71,12 @@ object Presets {
         val items = list(ctx)
         items.removeAll { it.name == name }
         save(ctx, items)
+    }
+
+    fun resetToSeeds(ctx: Context) {
+        save(ctx, SEED.toMutableList())
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(SEEDED, true).apply()
     }
 
     private fun save(ctx: Context, items: List<Preset>) {
